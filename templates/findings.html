@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Assessment {{ assessment.id }} · VulnScanner Pro</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main>
+    <p><a href="{{ url_for('index') }}">&larr; Back to assessments</a></p>
+    <h1>Assessment #{{ assessment.id }}</h1>
+    <p>
+      <strong>Type:</strong> {{ assessment.scan_type }} ·
+      <strong>Target:</strong> <code>{{ assessment.target }}</code> ·
+      <strong>Status:</strong> {{ assessment.status }}
+    </p>
+    {% if assessment.limitations %}
+      <p class="limitations">
+        <strong>Limitations:</strong> {{ assessment.limitations }}
+      </p>
+    {% endif %}
+
+    <section class="placeholder">
+      <h2>Findings</h2>
+      <p>Findings will appear here once scanner implementations land.</p>
+    </section>
+
+    <section class="actions">
+      <h2>Actions</h2>
+      <p>
+        <a class="btn-primary" href="{{ url_for('assessment_report', assessment_id=assessment.id) }}">
+          Download PDF report
+        </a>
+      </p>
+      <form method="post" action="">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="finding_id" value="">
+        <button class="btn-danger" type="submit" disabled>
+          Mark resolved (coming in Phase 6)
+        </button>
+      </form>
+    </section>
+
+    <p><a href="{{ url_for('comparison') }}">Comparison view (placeholder)</a></p>
+  </main>
+</body>
+</html>
