@@ -8,3 +8,11 @@ logs/*.log
 htmlcov/
 .env
 *.egg-info/
+
+scans.db
+*.db
+__pycache__/
+
+scans.db
+*.db
+__pycache__/

@@ -75,7 +75,7 @@ def scan():
         validated_target = validate_scan_request(scan_type, target)
     except ValidationError as exc:
         logger.warning("Rejected scan request: %s", exc)
-        flash(str(exc), "error")
+        flash(str(exc), "danger")
         return redirect(url_for("index"))
 
     with get_db() as connection:
@@ -98,15 +98,6 @@ def scan():
             assessment_id,
             exc,
         )
-        with get_db() as connection:
-            connection.execute(
-                """
-                UPDATE assessments
-                SET status = ?, completed_at = datetime('now'), limitations = ?
-                WHERE id = ?
-                """,
-                ("not_implemented", str(exc), assessment_id),
-            )
         flash(
             f"Scan request recorded, but scanning is not implemented yet: {exc}",
             "warning",
@@ -116,38 +107,24 @@ def scan():
         )
     except Exception:
         logger.exception("Scanner failed for assessment %s", assessment_id)
-        with get_db() as connection:
-            connection.execute(
-                """
-                UPDATE assessments
-                SET status = ?, completed_at = datetime('now'), limitations = ?
-                WHERE id = ?
-                """,
-                ("failed", "Scanner raised an unexpected error.", assessment_id),
-            )
-        flash("The scan failed unexpectedly. Check the server log.", "error")
+        flash("The scan failed unexpectedly. Check the server log.", "danger")
         return redirect(
             url_for("assessment_detail", assessment_id=assessment_id)
         )
 
-    findings_count = result.get("findings", 0)
-    limitations = result.get("limitations")
-    with get_db() as connection:
-        connection.execute(
-            """
-            UPDATE assessments
-            SET status = ?, completed_at = datetime('now'), limitations = ?
-            WHERE id = ?
-            """,
-            ("completed", limitations, assessment_id),
+    if result.get("error"):
+        flash(f"Scan failed: {result['error']}", "danger")
+    else:
+        flash(
+            f"Scan complete: {result.get('findings', 0)} finding(s)",
+            "info",
         )
-    flash(f"Scan completed with {findings_count} finding(s).", "success")
     return redirect(url_for("assessment_detail", assessment_id=assessment_id))
 
 
 @app.route("/assessment/<int:assessment_id>")
 def assessment_detail(assessment_id: int):
-    """Show the findings placeholder for a single assessment."""
+    """Show an assessment and its findings."""
     with get_db() as connection:
         row = connection.execute(
             """
@@ -158,9 +135,36 @@ def assessment_detail(assessment_id: int):
             """,
             (assessment_id,),
         ).fetchone()
+        findings = connection.execute(
+            """
+            SELECT f.id, f.assessment_id, f.asset_id, f.finding_type,
+                   f.title, f.description, f.evidence, f.risk_level,
+                   f.confidence, f.risk_reasoning, f.recommendation,
+                   f.requires_verification, f.fingerprint,
+                   f.remediation_status, f.first_seen, f.last_seen,
+                   a.host, a.port, a.service, a.version
+            FROM findings f
+            LEFT JOIN assets a ON a.id = f.asset_id
+            WHERE f.assessment_id = ?
+            ORDER BY
+                CASE f.risk_level
+                    WHEN 'Critical' THEN 1
+                    WHEN 'High' THEN 2
+                    WHEN 'Medium' THEN 3
+                    WHEN 'Low' THEN 4
+                    ELSE 5
+                END,
+                f.id DESC
+            """,
+            (assessment_id,),
+        ).fetchall()
     if row is None:
         abort(404)
-    return render_template("findings.html", assessment=dict(row))
+    return render_template(
+        "findings.html",
+        assessment=dict(row),
+        findings=[dict(f) for f in findings],
+    )
 
 
 @app.route("/assessment/<int:assessment_id>/report")

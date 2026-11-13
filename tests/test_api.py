@@ -1,7 +1,10 @@
 """API-level tests for the Flask application."""
 
+import subprocess
+
 import pytest
 
+import scanners.network_scanner as network_scanner
 from app import app
 from config import Config
 from core.database import get_db
@@ -52,7 +55,25 @@ def test_scan_shell_metachar_target_rejected(client):
     assert count == 0
 
 
-def test_valid_target_is_recorded_without_fake_findings(client):
+def test_valid_target_is_recorded_without_fake_findings(client, monkeypatch):
+    xml = (
+        '<?xml version="1.0"?>'
+        "<nmaprun>"
+        "<host>"
+        '<status state="up"/>'
+        '<address addr="10.0.0.5" addrtype="ipv4"/>'
+        "<ports></ports>"
+        "</host>"
+        "</nmaprun>"
+    )
+
+    def fake_run(*args, **kwargs):
+        return subprocess.CompletedProcess(
+            args=args[0], returncode=0, stdout=xml, stderr=""
+        )
+
+    monkeypatch.setattr(network_scanner.subprocess, "run", fake_run)
+
     response = client.post(
         "/scan",
         data={"scan_type": "network", "target": "10.0.0.5"},
@@ -60,16 +81,39 @@ def test_valid_target_is_recorded_without_fake_findings(client):
     assert response.status_code == 302
 
     with get_db() as connection:
-        assessment = connection.execute(
-            "SELECT status, limitations FROM assessments"
-        ).fetchone()
+        assessments = connection.execute(
+            "SELECT id, target, status FROM assessments"
+        ).fetchall()
         findings = connection.execute(
             "SELECT COUNT(*) AS total FROM findings"
         ).fetchone()["total"]
 
-    assert assessment["status"] == "not_implemented"
-    assert "not yet implemented" in assessment["limitations"].lower()
+    assert len(assessments) == 1
+    assert assessments[0]["target"] == "10.0.0.5"
+    assert assessments[0]["status"] == "completed"
     assert findings == 0
+
+
+def test_invalid_target_is_rejected(client):
+    malicious_target = "1.1.1.1;rm"
+
+    response = client.post(
+        "/scan",
+        data={"scan_type": "network", "target": malicious_target},
+    )
+    assert response.status_code == 302
+
+    with get_db() as connection:
+        matching = connection.execute(
+            "SELECT COUNT(*) AS total FROM assessments WHERE target = ?",
+            (malicious_target,),
+        ).fetchone()["total"]
+        total = connection.execute(
+            "SELECT COUNT(*) AS total FROM assessments"
+        ).fetchone()["total"]
+
+    assert matching == 0
+    assert total == 0
 
 
 def test_csrf_rejection_without_token(client):

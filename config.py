@@ -39,7 +39,7 @@ class Config:
     DATABASE = os.environ.get("DATABASE", "scans.db")
 
     NMAP_PATH = os.environ.get(
-        "NMAP_PATH", r"C:\Users\shine\Downloads\nmap.exe"
+        "NMAP_PATH", r"C:\Program Files (x86)\Nmap\nmap.exe"
     )
     NMAP_TIMEOUT = _env_int("NMAP_TIMEOUT", 300)
 
