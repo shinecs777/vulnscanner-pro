@@ -48,9 +48,13 @@ def add_security_headers(response):
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "style-src 'self' 'unsafe-inline'; "
-        "script-src 'self'; "
+        "base-uri 'self'; "
+        "object-src 'none'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "script-src 'self' 'unsafe-inline'; "
         "img-src 'self' data:; "
+        "connect-src 'self'; "
         "form-action 'self'; "
         "frame-ancestors 'none'"
     )

@@ -825,8 +825,8 @@ p.limitations strong,
 }
 
 .text-green {
-  color: #1E9E5B; /* Darker metallic green */
-  text-shadow: 0 0 5px rgba(30, 158, 91, 0.5); /* Softer glow */
+  color: #5BB9ED; /* Ice blue */
+  text-shadow: 0 0 8px rgba(91, 185, 237, 0.4); /* Soft blue glow */
 }
 
 .text-gold {
@@ -836,7 +836,7 @@ p.limitations strong,
 
 .splash-text {
   font-family: 'Share Tech Mono', monospace;
-  font-size: 3rem;
+  font-size: 2rem;
   letter-spacing: 4px;
   margin-bottom: 30px;
   position: relative;
