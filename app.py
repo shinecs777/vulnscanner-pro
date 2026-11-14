@@ -69,8 +69,13 @@ def index():
             LIMIT 20
             """
         ).fetchall()
+        total_scans = connection.execute(
+            "SELECT COUNT(*) FROM assessments"
+        ).fetchone()[0]
     assessments = [dict(row) for row in rows]
-    return render_template("index.html", assessments=assessments)
+    return render_template(
+        "index.html", assessments=assessments, total_scans=total_scans
+    )
 
 
 @app.route("/scan", methods=["POST"])

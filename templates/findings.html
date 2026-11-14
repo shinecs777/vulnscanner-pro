@@ -4,41 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Assessment {{ assessment.id }} · VulnScanner Pro</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <style>
-    .summary { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0 1rem; }
-    .pill { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600; border: 1px solid #30363d; }
-    .pill-neutral { background: #161b22; color: #c9d1d9; }
-    .pill-critical { background: rgba(255, 0, 80, 0.15); color: #ff0050; border-color: #ff0050; }
-    .pill-medium { background: rgba(255, 165, 2, 0.15); color: #ffa502; border-color: #ffa502; }
-    .pill-low { background: rgba(46, 213, 115, 0.15); color: #2ed573; border-color: #2ed573; }
-    .findings-table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
-    .findings-table th, .findings-table td { text-align: left; vertical-align: top; padding: 0.55rem 0.6rem; border-bottom: 1px solid #30363d; }
-    .findings-table th { color: #8b949e; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; }
-    .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 6px; font-size: 0.72rem; font-weight: 600; white-space: nowrap; }
-    .badge-informational { background: rgba(112, 161, 255, 0.15); color: #70a1ff; border: 1px solid #70a1ff; }
-    .badge-misconfiguration { background: rgba(255, 165, 2, 0.15); color: #ffa502; border: 1px solid #ffa502; }
-    .badge-potential { background: rgba(255, 149, 0, 0.15); color: #ff9500; border: 1px solid #ff9500; }
-    .badge-confirmed { background: rgba(255, 71, 87, 0.15); color: #ff4757; border: 1px solid #ff4757; }
-    .risk { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 6px; font-size: 0.72rem; font-weight: 700; white-space: nowrap; }
-    .risk-critical { background: rgba(255, 0, 80, 0.15); color: #ff0050; border: 1px solid #ff0050; }
-    .risk-high { background: rgba(255, 71, 87, 0.15); color: #ff4757; border: 1px solid #ff4757; }
-    .risk-medium { background: rgba(255, 165, 2, 0.15); color: #ffa502; border: 1px solid #ffa502; }
-    .risk-low { background: rgba(46, 213, 115, 0.15); color: #2ed573; border: 1px solid #2ed573; }
-    .risk-info { background: rgba(112, 161, 255, 0.15); color: #70a1ff; border: 1px solid #70a1ff; }
-    .verify { display: inline-block; margin-right: 0.35rem; padding: 0.1rem 0.4rem; border-radius: 6px; font-size: 0.7rem; font-weight: 600; color: #ffa502; border: 1px solid #ffa502; background: rgba(255, 165, 2, 0.12); }
-    .confidence { font-size: 0.8rem; color: #8b949e; }
-    .evidence { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 0.78rem; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; color: #c9d1d9; }
-    .recommendation { overflow-wrap: anywhere; }
-    .empty-state { margin-top: 0.75rem; padding: 1rem 1.1rem; border: 1px solid #30363d; border-radius: 8px; background: #161b22; color: #8b949e; }
-    .flash { padding: 0.75rem 1rem; margin-bottom: 0.75rem; border-radius: 6px; border: 1px solid #30363d; background: #161b22; color: #c9d1d9; }
-    .flash-danger { background: #4d1a1a; border-color: #b91c1c; color: #fca5a5; }
-    .flash-warning { background: #4d3a1a; border-color: #b45309; color: #fcd34d; }
-    .flash-info { background: #1a3a4d; border-color: #1d4ed8; color: #93c5fd; }
-    .flash-success { background: #1a4d1a; border-color: #15803d; color: #86efac; }
-  </style>
 </head>
-<body>
+<body class="theme-results">
   <main>
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% for category, message in messages %}
