@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
 :root {
   color-scheme: dark;
   --bg-main: #070909;
@@ -781,3 +783,219 @@ p.limitations strong,
     box-shadow: 0 0 8px var(--green-primary);
   }
 }
+
+#splash-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #070909;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#splash-image-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url('/static/img/doom-splash.jpg');
+  background-size: cover;
+  background-position: center;
+  z-index: 1;
+  opacity: 0.6;
+  animation: slow-zoom 20s infinite alternate;
+}
+
+.splash-overlay {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, rgba(7, 9, 9, 0.2) 0%, rgba(7, 9, 9, 0.9) 100%);
+  z-index: 2;
+}
+
+.splash-content {
+  position: relative;
+  z-index: 3;
+  text-align: center;
+  padding: 20px;
+}
+
+.text-green {
+  color: #1E9E5B; /* Darker metallic green */
+  text-shadow: 0 0 5px rgba(30, 158, 91, 0.5); /* Softer glow */
+}
+
+.text-gold {
+  color: #FFBB55;
+  text-shadow: 0 0 10px #FFBB55, 0 0 20px #FFBB55;
+}
+
+.splash-text {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 3rem;
+  letter-spacing: 4px;
+  margin-bottom: 30px;
+  position: relative;
+  white-space: nowrap;
+}
+
+.typewriter {
+  display: inline-block;
+  overflow: hidden;
+  white-space: nowrap;
+  width: 0;
+}
+
+.animate-type .typewriter {
+  animation: typing 2s steps(20, end) forwards;
+}
+
+@keyframes typing {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+/* The Dust Effect */
+.animate-dust .typewriter {
+    /* This is the fix: hide the original text instantly when dusting starts */
+    visibility: hidden; 
+    animation: dust-disintegrate 2s ease-out forwards;
+    /* Keep the typed text at full width so it can be seen while dusting */
+    width: 100%;
+}
+
+@keyframes dust-disintegrate {
+    0% { 
+        visibility: visible; /* Keep it visible at the very start of the animation */
+        filter: blur(0px) contrast(1); 
+        transform: scale(1) translate(0, 0); 
+        opacity: 1; 
+        color: #39E982; 
+    }
+    40% { 
+        filter: blur(2px) contrast(2); 
+        transform: scale(1.02) translate(10px, -5px); 
+        opacity: 0.9;
+        color: #a0ffcc;
+    }
+    80% { 
+        filter: blur(8px) contrast(4); 
+        transform: scale(1.05) translate(30px, -15px); 
+        opacity: 0.4;
+        color: #ffffff; 
+    }
+    100% { 
+        filter: blur(15px) contrast(10); 
+        transform: scale(1.1) translate(60px, -30px); 
+        opacity: 0; 
+        color: #ffffff;
+        visibility: hidden;
+    }
+}
+
+.splash-btn {
+  background: transparent;
+  color: #39E982;
+  font-family: 'Share Tech Mono', monospace;
+  font-weight: bold;
+  font-size: 1.5rem;
+  padding: 15px 40px;
+  border: 2px solid #39E982;
+  cursor: pointer;
+  letter-spacing: 2px;
+  box-shadow: 0 0 10px rgba(57, 233, 130, 0.2);
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+}
+
+.splash-btn:hover {
+  background: rgba(57, 233, 130, 0.1);
+  box-shadow: 0 0 30px rgba(57, 233, 130, 0.6);
+}
+
+.hidden {
+  display: none !important;
+}
+
+.fade-in {
+  animation: fade-in-anim 1s forwards;
+}
+
+@keyframes fade-in-anim {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slow-zoom {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.1);
+  }
+}
+
+@media (max-width: 768px) {
+  .splash-text {
+    font-size: 1.5rem;
+    letter-spacing: 2px;
+  }
+
+  .splash-btn {
+    font-size: 1rem;
+    padding: 10px 20px;
+  }
+}
+
+/* --- SPLASH SCREEN & DASHBOARD FIXES --- */
+.hidden { display: none !important; }
+
+.animate-type .typewriter { animation: typing 2s steps(20, end) forwards; }
+@keyframes typing { from { width: 0; } to { width: 100%; } }
+
+.animate-dust .typewriter { visibility: hidden; animation: dust-disintegrate 2s ease-out forwards; }
+@keyframes dust-disintegrate {
+    0% { visibility: visible; filter: blur(0px) contrast(1); transform: scale(1) translate(0, 0); opacity: 1; color: #39E982; }
+    40% { filter: blur(2px) contrast(2); transform: scale(1.02) translate(10px, -5px); opacity: 0.9; color: #a0ffcc; }
+    80% { filter: blur(8px) contrast(4); transform: scale(1.05) translate(30px, -15px); opacity: 0.4; color: #fff; }
+    100% { filter: blur(15px) contrast(10); transform: scale(1.1) translate(60px, -30px); opacity: 0; color: #fff; }
+}
+
+#splash-screen { position: fixed; inset: 0; z-index: 9999; background: #070909; display: flex; justify-content: center; align-items: center; flex-direction: column; }
+#splash-image-bg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-image: url('/static/img/doom-splash.jpg'); background-size: cover; background-position: center; z-index: 1; opacity: 0.6; animation: slow-zoom 20s infinite alternate; }
+.splash-overlay { position: absolute; inset: 0; background: radial-gradient(circle, rgba(7,9,9,0.2) 0%, rgba(7,9,9,0.9) 100%); z-index: 2; }
+.splash-content { position: relative; z-index: 3; text-align: center; padding: 20px; }
+@keyframes slow-zoom { from { transform: scale(1); } to { transform: scale(1.1); } }
+
+.container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+.dashboard-header { margin-bottom: 2rem; text-align: center; }
+.brand-title { font-family: 'Orbitron', sans-serif; font-size: 2.5rem; color: var(--green-primary); text-shadow: 0 0 10px var(--green-primary); }
+.section-title { font-family: 'Orbitron', sans-serif; color: var(--text-main); margin-top: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+.scan-form-card { background: var(--bg-card); border: 1px solid var(--border); padding: 2rem; border-radius: 8px; margin-top: 2rem; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+.scan-form-grid { display: grid; grid-template-columns: 1fr 2fr auto; gap: 1rem; align-items: end; }
+.form-group label { display: block; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem; }
+.form-group select, .form-group input { width: 100%; background: rgba(0,0,0,0.5); border: 1px solid var(--metal); color: var(--text-main); padding: 0.75rem; border-radius: 4px; font-family: 'JetBrains Mono', monospace; }
+.form-group select:focus, .form-group input:focus { outline: none; border-color: var(--green-primary); box-shadow: 0 0 10px rgba(57, 233, 130, 0.3); }
+.btn-primary { background: var(--green-primary); color: #000; font-family: 'Orbitron', sans-serif; font-weight: 700; padding: 0.75rem 1.5rem; border: none; border-radius: 4px; cursor: pointer; transition: all 0.3s; text-transform: uppercase; }
+.btn-primary:hover { box-shadow: 0 0 20px rgba(57, 233, 130, 0.6); transform: translateY(-2px); }
+.table-container { overflow-x: auto; margin-top: 1rem; }
+.dashboard-table { width: 100%; border-collapse: collapse; background: var(--bg-panel); font-family: 'Inter', sans-serif; font-size: 0.9rem; }
+.dashboard-table th { background: rgba(0,0,0,0.4); color: var(--text-muted); text-align: left; padding: 1rem; border-bottom: 1px solid var(--border); font-family: 'Orbitron', sans-serif; letter-spacing: 1px; }
+.dashboard-table td { padding: 1rem; border-bottom: 1px solid var(--border); color: var(--text-main); }
+.dashboard-table tr:hover { background: rgba(255,255,255,0.02); }
+.dashboard-table .mono { font-family: 'JetBrains Mono', monospace; color: var(--green-primary); }
+.empty-state { text-align: center; color: var(--text-muted); padding: 2rem; border: 1px dashed var(--border); margin-top: 1rem; font-family: 'JetBrains Mono', monospace; }
