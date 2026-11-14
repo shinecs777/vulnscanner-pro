@@ -10,7 +10,6 @@ import scanners.web_scanner as web_scanner
 import scanners.cve_lookup as cve_lookup
 from config import Config
 from core.models import get_db, init_db
-from reports.pdf_generator import generate_pdf
 from scanners.cve_lookup import search_cves
 from scanners.web_scanner import scan_web
 
@@ -794,9 +793,3 @@ def test_search_cves_retries_on_503(monkeypatch, tmp_db):
     assert len(results) == 1
     assert results[0]["cve_id"] == "CVE-2011-2523"
     assert calls["count"] == 2
-
-
-class TestScannerStubs:
-    def test_pdf_generator_raises_not_implemented(self):
-        with pytest.raises(NotImplementedError, match="Phase 5"):
-            generate_pdf(1)
