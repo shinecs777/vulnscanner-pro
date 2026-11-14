@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: vulnscanner-pro
+    env: python
+    buildCommand: |
+      apt-get update && apt-get install -y nmap
+      pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: NMAP_PATH
+        value: /usr/bin/nmap
