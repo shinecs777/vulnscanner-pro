@@ -3,8 +3,10 @@
 import subprocess
 
 import pytest
+import requests
 
 import scanners.network_scanner as network_scanner
+import scanners.web_scanner as web_scanner
 from config import Config
 from core.models import get_db, init_db
 from reports.pdf_generator import generate_pdf
@@ -86,6 +88,42 @@ def tmp_assessment(tmp_path, monkeypatch):
         )
         assessment_id = cursor.lastrowid
     return assessment_id
+
+
+class FakeResponse:
+    def __init__(self, status_code=200, url="https://example.com/", headers=None):
+        self.status_code = status_code
+        self.url = url
+        self.headers = dict(headers or {})
+
+
+@pytest.fixture()
+def web_assessment(tmp_path, monkeypatch):
+    monkeypatch.setattr(Config, "DATABASE", str(tmp_path / "test_web.db"))
+    init_db()
+    with get_db() as connection:
+        cursor = connection.execute(
+            "INSERT INTO assessments (scan_type, target) VALUES (?, ?)",
+            ("web", "https://example.com"),
+        )
+        assessment_id = cursor.lastrowid
+    return assessment_id
+
+
+def _patch_web_get(monkeypatch, response=None, exc=None, captured=None):
+    def fake_get(url, **kwargs):
+        if captured is not None:
+            captured["url"] = url
+            captured.update(kwargs)
+        if exc is not None:
+            raise exc
+        return response
+
+    monkeypatch.setattr(web_scanner.requests, "get", fake_get)
+
+
+def _titles(assessment_id):
+    return [finding["title"] for finding in _findings(assessment_id)]
 
 
 def test_scan_network_missing_nmap(monkeypatch, tmp_assessment):
@@ -326,11 +364,211 @@ def test_scan_network_cve_creates_potential_finding(
     assert link["is_confirmed"] == 0
 
 
-class TestScannerStubs:
-    def test_web_scanner_raises_not_implemented(self):
-        with pytest.raises(NotImplementedError, match="Phase 3"):
-            scan_web(1, "https://example.com")
+def test_scan_web_connection_error(monkeypatch, web_assessment):
+    _patch_web_get(monkeypatch, exc=requests.exceptions.ConnectionError())
 
+    result = scan_web(web_assessment, "https://example.com")
+
+    assert result["error"] == "Connection failed"
+    assert result["findings"] == 0
+    assert result["limitations"]
+    assert _assessment_status(web_assessment) == "failed"
+    assert _findings(web_assessment) == []
+
+
+def test_scan_web_timeout(monkeypatch, web_assessment):
+    _patch_web_get(monkeypatch, exc=requests.exceptions.Timeout())
+
+    result = scan_web(web_assessment, "https://example.com")
+
+    assert result["error"] == "Request timed out"
+    assert result["findings"] == 0
+    assert result["limitations"]
+    assert _assessment_status(web_assessment) == "failed"
+
+
+def test_scan_web_too_many_redirects(monkeypatch, web_assessment):
+    _patch_web_get(monkeypatch, exc=requests.exceptions.TooManyRedirects())
+
+    result = scan_web(web_assessment, "https://example.com")
+
+    assert result["error"] == "Too many redirects"
+    assert result["findings"] == 0
+    assert result["limitations"]
+    assert _assessment_status(web_assessment) == "failed"
+
+
+def test_scan_web_all_headers_present(monkeypatch, web_assessment):
+    response = FakeResponse(
+        headers={
+            "Content-Security-Policy": "default-src 'self'",
+            "X-Frame-Options": "DENY",
+            "Strict-Transport-Security": "max-age=31536000",
+            "Server": "nginx",
+        }
+    )
+    _patch_web_get(monkeypatch, response=response)
+
+    result = scan_web(web_assessment, "https://example.com")
+
+    assert "error" not in result
+    assert result["findings"] == 1
+    assert result["status_code"] == 200
+    assert result["final_url"] == "https://example.com/"
+    assert result["limitations"]
+    assert _assessment_status(web_assessment) == "completed"
+    findings = _findings(web_assessment)
+    assert len(findings) == 1
+    assert findings[0]["title"] == "Web Endpoint Reachable"
+    assert findings[0]["finding_type"] == "informational"
+
+
+def test_scan_web_missing_csp(monkeypatch, web_assessment):
+    response = FakeResponse(
+        headers={
+            "X-Frame-Options": "DENY",
+            "Strict-Transport-Security": "max-age=31536000",
+        }
+    )
+    _patch_web_get(monkeypatch, response=response)
+
+    result = scan_web(web_assessment, "https://example.com")
+
+    assert result["findings"] == 2
+    csp = [
+        finding
+        for finding in _findings(web_assessment)
+        if finding["title"] == "Missing Content-Security-Policy"
+    ]
+    assert len(csp) == 1
+    assert csp[0]["finding_type"] == "misconfiguration"
+    assert csp[0]["risk_level"] == "Low"
+    assert csp[0]["confidence"] == "high"
+    assert csp[0]["requires_verification"] == 1
+    assert csp[0]["evidence"] == "Absent header: Content-Security-Policy"
+
+
+def test_scan_web_missing_xframe(monkeypatch, web_assessment):
+    response = FakeResponse(
+        headers={
+            "Content-Security-Policy": "default-src 'self'",
+            "Strict-Transport-Security": "max-age=31536000",
+        }
+    )
+    _patch_web_get(monkeypatch, response=response)
+
+    result = scan_web(web_assessment, "https://example.com")
+
+    assert result["findings"] == 2
+    xframe = [
+        finding
+        for finding in _findings(web_assessment)
+        if finding["title"] == "Missing X-Frame-Options"
+    ]
+    assert len(xframe) == 1
+    assert xframe[0]["finding_type"] == "misconfiguration"
+    assert xframe[0]["risk_level"] == "Low"
+    assert xframe[0]["requires_verification"] == 1
+    assert xframe[0]["evidence"] == "Absent header: X-Frame-Options"
+
+
+def test_scan_web_http_skips_hsts(monkeypatch, web_assessment):
+    response = FakeResponse(
+        url="http://example.com/",
+        headers={
+            "Content-Security-Policy": "default-src 'self'",
+            "X-Frame-Options": "DENY",
+        },
+    )
+    _patch_web_get(monkeypatch, response=response)
+
+    result = scan_web(web_assessment, "http://example.com")
+
+    assert result["findings"] == 1
+    assert "Missing HSTS" not in _titles(web_assessment)
+
+
+def test_scan_web_https_flags_hsts(monkeypatch, web_assessment):
+    response = FakeResponse(
+        headers={
+            "Content-Security-Policy": "default-src 'self'",
+            "X-Frame-Options": "DENY",
+        }
+    )
+    _patch_web_get(monkeypatch, response=response)
+
+    result = scan_web(web_assessment, "https://example.com")
+
+    assert result["findings"] == 2
+    hsts = [
+        finding
+        for finding in _findings(web_assessment)
+        if finding["title"] == "Missing HSTS"
+    ]
+    assert len(hsts) == 1
+    assert hsts[0]["finding_type"] == "misconfiguration"
+    assert hsts[0]["risk_level"] == "Low"
+    assert hsts[0]["requires_verification"] == 1
+    assert hsts[0]["evidence"] == "Absent header: Strict-Transport-Security"
+
+
+def test_scan_web_all_three_missing(monkeypatch, web_assessment):
+    _patch_web_get(monkeypatch, response=FakeResponse(headers={}))
+
+    result = scan_web(web_assessment, "https://example.com")
+
+    assert result["findings"] == 4
+    titles = _titles(web_assessment)
+    assert "Web Endpoint Reachable" in titles
+    assert "Missing Content-Security-Policy" in titles
+    assert "Missing X-Frame-Options" in titles
+    assert "Missing HSTS" in titles
+    header_findings = [
+        finding
+        for finding in _findings(web_assessment)
+        if finding["title"] != "Web Endpoint Reachable"
+    ]
+    assert len(header_findings) == 3
+    assert all(
+        finding["finding_type"] == "misconfiguration"
+        for finding in header_findings
+    )
+    assert all(finding["risk_level"] == "Low" for finding in header_findings)
+    assert all(
+        finding["requires_verification"] == 1 for finding in header_findings
+    )
+
+
+def test_scan_web_status_recorded(monkeypatch, web_assessment):
+    monkeypatch.setattr(Config, "WEB_USER_AGENT", "TestAgent/1.0", raising=False)
+    captured = {}
+    response = FakeResponse(status_code=204, headers={"Server": "nginx"})
+    _patch_web_get(monkeypatch, response=response, captured=captured)
+
+    result = scan_web(web_assessment, "https://example.com")
+
+    assert result["status_code"] == 204
+    assert result["final_url"] == "https://example.com/"
+    assert captured["timeout"] == Config.WEB_TIMEOUT
+    assert captured["allow_redirects"] is True
+    assert captured["verify"] is True
+    assert "max_redirects" not in captured
+    assert captured["headers"]["User-Agent"] == "TestAgent/1.0"
+
+    with get_db() as connection:
+        row = connection.execute(
+            """
+            SELECT status, completed_at, limitations
+            FROM assessments WHERE id = ?
+            """,
+            (web_assessment,),
+        ).fetchone()
+    assert row["status"] == "completed"
+    assert row["completed_at"] is not None
+    assert row["limitations"]
+
+
+class TestScannerStubs:
     def test_cve_lookup_raises_not_implemented(self):
         with pytest.raises(NotImplementedError, match="Phase 4"):
             search_cves("Apache")

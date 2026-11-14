@@ -51,6 +51,8 @@ class Config:
     NVD_CACHE_TTL_DAYS = _env_int("NVD_CACHE_TTL_DAYS", 7)
 
     WEB_TIMEOUT = _env_int("WEB_TIMEOUT", 10)
+    WEB_MAX_REDIRECTS = 3
+    WEB_USER_AGENT = "VulnScanner-Pro/0.1 (authorized-assessment)"
     BLOCKED_HOSTS = _env_set(
         "BLOCKED_HOSTS",
         {
