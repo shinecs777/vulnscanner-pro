@@ -46,8 +46,10 @@ class Config:
     NVD_API_URL = os.environ.get(
         "NVD_API_URL", "https://services.nvd.nist.gov/rest/json/cves/2.0"
     )
-    NVD_API_KEY = os.environ.get("NVD_API_KEY", "")
+    NVD_API_KEY = os.environ.get("NVD_API_KEY") or None
     NVD_RATE_LIMIT_NO_KEY = _env_int("NVD_RATE_LIMIT_NO_KEY", 6)
+    NVD_RATE_LIMIT_WITH_KEY = 0.6
+    NVD_TIMEOUT = 15
     NVD_CACHE_TTL_DAYS = _env_int("NVD_CACHE_TTL_DAYS", 7)
 
     WEB_TIMEOUT = _env_int("WEB_TIMEOUT", 10)

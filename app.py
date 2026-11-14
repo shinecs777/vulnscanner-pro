@@ -23,6 +23,14 @@ init_db()
 
 logger = logging.getLogger(__name__)
 
+if not Config.NVD_API_KEY:
+    logger.warning(
+        "NVD_API_KEY is not set. CVE lookups will be rate-limited "
+        "to 6.5s per request. Get a free key at "
+        "https://nvd.nist.gov/developers/request-an-api-key and set "
+        "the NVD_API_KEY environment variable before running scans."
+    )
+
 app = Flask(__name__)
 app.config.update(
     SECRET_KEY=Config.SECRET_KEY,
@@ -77,6 +85,30 @@ def scan():
         logger.warning("Rejected scan request: %s", exc)
         flash(str(exc), "danger")
         return redirect(url_for("index"))
+
+    with get_db() as conn:
+        recent = conn.execute(
+            """
+            SELECT id FROM assessments
+            WHERE target = ?
+              AND scan_type = ?
+              AND status IN ('pending', 'running')
+              AND started_at > datetime('now', '-120 seconds')
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (validated_target, scan_type),
+        ).fetchone()
+
+    if recent:
+        flash(
+            f"A scan for {validated_target} is already running "
+            f"(assessment #{recent['id']}). Please wait for it to finish.",
+            "warning",
+        )
+        return redirect(
+            url_for("assessment_detail", assessment_id=recent["id"])
+        )
 
     with get_db() as connection:
         cursor = connection.execute(

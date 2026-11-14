@@ -31,10 +31,20 @@
     .evidence { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 0.78rem; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; color: #c9d1d9; }
     .recommendation { overflow-wrap: anywhere; }
     .empty-state { margin-top: 0.75rem; padding: 1rem 1.1rem; border: 1px solid #30363d; border-radius: 8px; background: #161b22; color: #8b949e; }
+    .flash { padding: 0.75rem 1rem; margin-bottom: 0.75rem; border-radius: 6px; border: 1px solid #30363d; background: #161b22; color: #c9d1d9; }
+    .flash-danger { background: #4d1a1a; border-color: #b91c1c; color: #fca5a5; }
+    .flash-warning { background: #4d3a1a; border-color: #b45309; color: #fcd34d; }
+    .flash-info { background: #1a3a4d; border-color: #1d4ed8; color: #93c5fd; }
+    .flash-success { background: #1a4d1a; border-color: #15803d; color: #86efac; }
   </style>
 </head>
 <body>
   <main>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="flash flash-{{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
     <p><a href="{{ url_for('index') }}">&larr; Back to assessments</a></p>
     <h1>Assessment #{{ assessment.id }}</h1>
     <p>

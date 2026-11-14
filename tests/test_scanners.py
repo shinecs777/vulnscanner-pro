@@ -7,6 +7,7 @@ import requests
 
 import scanners.network_scanner as network_scanner
 import scanners.web_scanner as web_scanner
+import scanners.cve_lookup as cve_lookup
 from config import Config
 from core.models import get_db, init_db
 from reports.pdf_generator import generate_pdf
@@ -124,6 +125,58 @@ def _patch_web_get(monkeypatch, response=None, exc=None, captured=None):
 
 def _titles(assessment_id):
     return [finding["title"] for finding in _findings(assessment_id)]
+
+
+@pytest.fixture()
+def tmp_db(tmp_path, monkeypatch):
+    monkeypatch.setattr(Config, "DATABASE", str(tmp_path / "test_cve.db"))
+    init_db()
+    yield
+
+
+class FakeNvdResponse:
+    def __init__(self, status_code=200, payload=None):
+        self.status_code = status_code
+        self._payload = payload if payload is not None else {}
+
+    def json(self):
+        return self._payload
+
+
+def _patch_nvd(monkeypatch, response=None, exc=None, captured=None):
+    def fake_get(url, **kwargs):
+        if captured is not None:
+            captured["url"] = url
+            captured.update(kwargs)
+        if exc is not None:
+            raise exc
+        return response
+
+    monkeypatch.setattr(cve_lookup.requests, "get", fake_get)
+    monkeypatch.setattr(cve_lookup.time, "sleep", lambda *args, **kwargs: None)
+
+
+def _nvd_cve(cve_id, score=7.5, severity="HIGH"):
+    cve = {
+        "id": cve_id,
+        "descriptions": [{"lang": "en", "value": f"Description for {cve_id}"}],
+        "published": "2020-01-02T03:04:05.000",
+        "references": [{"url": f"https://nvd.nist.gov/vuln/detail/{cve_id}"}],
+    }
+    if score is not None or severity is not None:
+        cve["metrics"] = {
+            "cvssMetricV31": [
+                {"cvssData": {"baseScore": score, "baseSeverity": severity}}
+            ]
+        }
+    return {"cve": cve}
+
+
+def _cve_count():
+    with get_db() as connection:
+        return connection.execute(
+            "SELECT COUNT(*) AS total FROM cve_records"
+        ).fetchone()["total"]
 
 
 def test_scan_network_missing_nmap(monkeypatch, tmp_assessment):
@@ -568,11 +621,182 @@ def test_scan_web_status_recorded(monkeypatch, web_assessment):
     assert row["limitations"]
 
 
-class TestScannerStubs:
-    def test_cve_lookup_raises_not_implemented(self):
-        with pytest.raises(NotImplementedError, match="Phase 4"):
-            search_cves("Apache")
+def test_search_cves_success(monkeypatch, tmp_db):
+    payload = {
+        "vulnerabilities": [
+            {
+                "cve": {
+                    "id": "CVE-2011-2523",
+                    "descriptions": [
+                        {"lang": "en", "value": "vsftpd 2.3.4 backdoor"}
+                    ],
+                    "metrics": {
+                        "cvssMetricV31": [
+                            {
+                                "cvssData": {
+                                    "baseScore": 9.8,
+                                    "baseSeverity": "CRITICAL",
+                                }
+                            }
+                        ]
+                    },
+                    "published": "2011-07-01T00:00:00.000",
+                    "references": [
+                        {
+                            "url": (
+                                "https://nvd.nist.gov/vuln/detail/"
+                                "CVE-2011-2523"
+                            )
+                        }
+                    ],
+                }
+            }
+        ]
+    }
+    captured = {}
+    _patch_nvd(
+        monkeypatch,
+        response=FakeNvdResponse(200, payload),
+        captured=captured,
+    )
 
+    results = search_cves("vsftpd 2.3.4", max_results=3)
+
+    assert len(results) == 1
+    assert results[0]["cve_id"] == "CVE-2011-2523"
+    assert results[0]["description"] == "vsftpd 2.3.4 backdoor"
+    assert results[0]["cvss_score"] == 9.8
+    assert results[0]["cvss_severity"] == "CRITICAL"
+    assert results[0]["published"] == "2011-07-01"
+    assert results[0]["references"] == [
+        "https://nvd.nist.gov/vuln/detail/CVE-2011-2523"
+    ]
+    assert captured["params"]["keywordSearch"] == "vsftpd 2.3.4"
+    assert captured["params"]["resultsPerPage"] == 3
+    assert captured["timeout"] == getattr(Config, "NVD_TIMEOUT", 10)
+
+    with get_db() as connection:
+        row = connection.execute(
+            "SELECT * FROM cve_records WHERE cve_id = ?",
+            ("CVE-2011-2523",),
+        ).fetchone()
+    assert row is not None
+    assert row["cvss_score"] == 9.8
+    assert row["cvss_severity"] == "CRITICAL"
+    assert row["published"] == "2011-07-01"
+    assert "nvd.nist.gov" in row["references_json"]
+
+
+def test_search_cves_timeout_returns_empty(monkeypatch, tmp_db):
+    _patch_nvd(monkeypatch, exc=requests.exceptions.Timeout())
+
+    assert search_cves("anything") == []
+    assert _cve_count() == 0
+
+
+def test_search_cves_403_returns_empty(monkeypatch, tmp_db):
+    _patch_nvd(monkeypatch, response=FakeNvdResponse(403))
+
+    assert search_cves("x") == []
+    assert _cve_count() == 0
+
+
+def test_search_cves_500_returns_empty(monkeypatch, tmp_db):
+    _patch_nvd(monkeypatch, response=FakeNvdResponse(500))
+
+    assert search_cves("x") == []
+    assert _cve_count() == 0
+
+
+def test_search_cves_empty_response(monkeypatch, tmp_db):
+    _patch_nvd(
+        monkeypatch,
+        response=FakeNvdResponse(200, {"vulnerabilities": []}),
+    )
+
+    assert search_cves("anything") == []
+    assert _cve_count() == 0
+
+
+def test_search_cves_malformed_response(monkeypatch, tmp_db):
+    _patch_nvd(
+        monkeypatch,
+        response=FakeNvdResponse(200, {"unexpected": "structure"}),
+    )
+
+    assert search_cves("x") == []
+    assert _cve_count() == 0
+
+
+def test_search_cves_respects_max_results(monkeypatch, tmp_db):
+    payload = {
+        "vulnerabilities": [
+            _nvd_cve(f"CVE-2020-000{i}") for i in range(1, 6)
+        ]
+    }
+    _patch_nvd(monkeypatch, response=FakeNvdResponse(200, payload))
+
+    results = search_cves("example", max_results=2)
+
+    assert len(results) == 2
+    assert results[0]["cve_id"] == "CVE-2020-0001"
+    assert results[1]["cve_id"] == "CVE-2020-0002"
+
+
+def test_search_cves_no_cvss(monkeypatch, tmp_db):
+    payload = {
+        "vulnerabilities": [
+            {
+                "cve": {
+                    "id": "CVE-2020-9999",
+                    "descriptions": [
+                        {"lang": "en", "value": "No metrics here"}
+                    ],
+                    "published": "2020-05-06T00:00:00.000",
+                    "references": [],
+                }
+            }
+        ]
+    }
+    _patch_nvd(monkeypatch, response=FakeNvdResponse(200, payload))
+
+    results = search_cves("example")
+
+    assert len(results) == 1
+    assert results[0]["cvss_score"] is None
+    assert results[0]["cvss_severity"] is None
+
+
+def test_search_cves_logs_do_not_crash(monkeypatch, tmp_db):
+    _patch_nvd(monkeypatch, exc=Exception("boom"))
+
+    assert search_cves("x") == []
+    assert _cve_count() == 0
+
+
+def test_search_cves_retries_on_503(monkeypatch, tmp_db):
+    payload = {
+        "vulnerabilities": [_nvd_cve("CVE-2011-2523", 9.8, "CRITICAL")]
+    }
+    responses = [FakeNvdResponse(503), FakeNvdResponse(200, payload)]
+    calls = {"count": 0}
+
+    def fake_get(url, **kwargs):
+        calls["count"] += 1
+        index = min(calls["count"] - 1, len(responses) - 1)
+        return responses[index]
+
+    monkeypatch.setattr(cve_lookup.requests, "get", fake_get)
+    monkeypatch.setattr(cve_lookup.time, "sleep", lambda *args, **kwargs: None)
+
+    results = search_cves("vsftpd")
+
+    assert len(results) == 1
+    assert results[0]["cve_id"] == "CVE-2011-2523"
+    assert calls["count"] == 2
+
+
+class TestScannerStubs:
     def test_pdf_generator_raises_not_implemented(self):
         with pytest.raises(NotImplementedError, match="Phase 5"):
             generate_pdf(1)

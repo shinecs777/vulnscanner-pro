@@ -10,6 +10,7 @@ import hashlib
 import logging
 import subprocess
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from config import Config
 from core.models import get_db
@@ -258,7 +259,41 @@ def _insert_finding(
     return row["id"] if row is not None else None
 
 
-def _record_findings(connection, assessment_id: int, hosts: list[dict]) -> int:
+def _lookup_cves_for_hosts(hosts: list[dict]) -> dict:
+    """Run deduplicated NVD lookups in parallel, bounded to 2 workers.
+
+    The NVD rate limiter in cve_lookup is shared across threads, so parallel
+    workers still respect the minimum request interval while hiding latency.
+    """
+    lookups = []
+    for host in hosts:
+        for svc in host["services"]:
+            if svc["product"] and svc["version"]:
+                lookups.append((svc["product"], svc["version"]))
+
+    unique_keywords = sorted({f"{p} {v}" for p, v in lookups})
+
+    cve_map: dict[str, list[dict]] = {}
+    if unique_keywords:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            future_to_kw = {
+                pool.submit(search_cves, kw, 3): kw
+                for kw in unique_keywords
+            }
+            for future in as_completed(future_to_kw):
+                kw = future_to_kw[future]
+                try:
+                    cve_map[kw] = future.result(timeout=30)
+                except Exception as exc:
+                    logger.warning("CVE lookup failed for %s: %s", kw, exc)
+                    cve_map[kw] = []
+
+    return cve_map
+
+
+def _record_findings(
+    connection, assessment_id: int, hosts: list[dict], cve_map: dict
+) -> int:
     """Persist assets, service findings, and CVE correlation for parsed hosts."""
     findings_count = 0
 
@@ -365,16 +400,7 @@ def _record_findings(connection, assessment_id: int, hosts: list[dict]) -> int:
                 continue
 
             keyword = f"{product} {version}"
-            try:
-                cves = search_cves(keyword, max_results=3)
-            except NotImplementedError:
-                logger.warning(
-                    "CVE lookup not yet implemented; skipping for %s", keyword
-                )
-                cves = []
-            except Exception as exc:
-                logger.warning('CVE lookup failed for "%s": %s', keyword, exc)
-                cves = []
+            cves = cve_map.get(keyword, [])
 
             for cve in cves:
                 cve_id = cve["cve_id"]
@@ -509,9 +535,11 @@ def scan_network(assessment_id: int, target: str) -> dict:
             _mark_failed(assessment_id)
             return _error("failed to parse nmap XML output")
 
+        cve_map = _lookup_cves_for_hosts(hosts)
+
         with get_db() as connection:
             findings_count = _record_findings(
-                connection, assessment_id, hosts
+                connection, assessment_id, hosts, cve_map
             )
 
         _mark_completed(assessment_id)
