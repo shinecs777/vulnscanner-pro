@@ -16,3 +16,7 @@ __pycache__/
 scans.db
 *.db
 __pycache__/
+
+scans.db
+static/video/
+*.mp4
