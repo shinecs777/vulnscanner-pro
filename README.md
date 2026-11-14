@@ -1,100 +1,208 @@
+<div align="center">
+
 # VulnScanner Pro
 
-VulnScanner Pro is a Flask-based, evidence-first vulnerability assessment
-scaffold for **authorized** network and website assessments only. It records
-scan requests, validates targets against SSRF and input-injection checks,
-defines a normalized SQLite schema for assets, findings, and CVE correlations,
-and exposes explicit scanner/report boundaries that raise `NotImplementedError`
-rather than returning fabricated results.
+**A cinematic, evidence-based vulnerability assessment web application**
 
-## Features
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Flask](https://img.shields.io/badge/Flask-3.0-000000?logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
+[![SQLite](https://img.shields.io/badge/SQLite-3-003B57?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
+[![Tests](https://img.shields.io/badge/tests-86%20passing-39E982)](https://github.com/)
 
-Implemented in this scaffold:
+</div>
 
-- Flask application with CSRF protection and conservative security headers.
-- Target validation for IP/CIDR and HTTP(S) URLs, including shell-metacharacter
-  rejection, cloud metadata blocking, internal-suffix blocking, and DNS-based
-  SSRF checks.
-- SQLite schema for assessments, assets, findings, CVE records, and
-  finding-to-CVE links with foreign keys, cascades, CHECK constraints, and a
-  per-assessment finding fingerprint uniqueness rule.
-- Assessment intake that persists the validated request and records an honest
-  `not_implemented` status when a scanner boundary is reached.
-- Dark-themed UI for submitting scans and reviewing recent assessments.
-- Rotating application logging and automated tests.
+> **Authorized use only.** VulnScanner Pro is intended for systems you own or
+> have explicit written permission to assess. It is not a substitute for a
+> professional penetration test.
 
-Not implemented yet (loud stubs, no fake data):
+## Screenshots
 
-- Nmap execution and XML parsing.
-- Web header/content checks.
-- NVD CVE lookups and caching.
-- PDF report generation.
-- Findings comparison.
+| Splash Screen | Home Dashboard |
+| :---: | :---: |
+| ![Splash Screen](docs/screenshots/splash.png) | ![Home Dashboard](docs/screenshots/home-dashboard.png) |
 
-## Prerequisites
+| Results Page | PDF Report |
+| :---: | :---: |
+| ![Results Page](docs/screenshots/results.png) | ![PDF Report](docs/screenshots/pdf-report.png) |
+
+## Key Features
+
+- **Network scanning with Nmap XML parsing** — Invokes Nmap with `-sT -sV -F`
+  and parses the XML output directly, mapping open ports, services, products,
+  and versions into normalized assets and findings.
+- **Web security-header assessment** — Performs a TLS-verified HTTP request and
+  evaluates missing `Content-Security-Policy`, `X-Frame-Options`, and HSTS
+  headers as evidence-backed misconfigurations.
+- **Evidence-based classification** — Every finding carries a type
+  (`informational`, `misconfiguration`, `potential_vuln`, `confirmed_vuln`),
+  risk level, confidence, technical reasoning, evidence, and remediation
+  guidance. Findings are never fabricated to fill a report.
+- **Real NIST NVD CVE integration** — Correlates product/version fingerprints
+  with NVD 2.0 data using bounded concurrency, local SQLite caching, request
+  throttling, retry-on-`429`/`503`, and graceful degradation when NVD is
+  unavailable.
+- **Automated PDF reporting** — Generates paginated, severity-color-coded
+  reports in memory with assessment metadata, severity totals, limitations,
+  findings tables, detailed evidence, recommendations, and CVE references.
+- **Cinematic SOC / Doctor Doom UI** — A dark tactical interface with a
+  full-screen splash, typewriter reveal, ash-dust transition, animated SOC HUD,
+  and custom artwork.
+- **Assessment history and deduplication** — Persists scans in SQLite and uses
+  deterministic finding fingerprints to prevent duplicate findings within an
+  assessment.
+- **Hardened engineering defaults** — CSRF protection, security headers,
+  parameterized SQL, argument-list subprocess execution, and target validation
+  before persistence or scanner dispatch.
+
+## Tech Stack
+
+| Layer | Technology |
+| --- | --- |
+| Language | Python 3.10+ |
+| Web framework | Flask 3.0, Flask-WTF |
+| Persistence | SQLite |
+| Network discovery | Nmap, `python-nmap`, `xml.etree.ElementTree` |
+| Web checks | `requests` |
+| Reporting | ReportLab |
+| Frontend | HTML5, CSS3, vanilla JavaScript |
+| Testing | pytest, pytest-cov, responses |
+
+## Security Design
+
+### SSRF-hardened input validation
+
+All targets pass through `core/validator.py` before anything is persisted or
+dispatched to a scanner.
+
+- Rejects shell metacharacters and control characters.
+- Normalizes and blocks legacy numeric IPv4 forms such as `2130706433` and
+  `0177.0.0.1`.
+- Rejects loopback, link-local, multicast, reserved, and unspecified addresses.
+- Blocks cloud metadata endpoints and `.local` / `.internal` hostnames.
+- Blocks private URL targets by default while allowing authorized private
+  network ranges for network scans.
+- Resolves hostnames with `socket.getaddrinfo()` and validates **every**
+  resolved address to prevent DNS-based SSRF bypasses.
+- Restricts web targets to HTTP(S), rejects embedded credentials, and verifies
+  TLS certificates.
+
+### Content Security Policy and browser hardening
+
+Every response includes:
+
+- `Content-Security-Policy` with explicit script, style, font, image, and
+  connection origins.
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY`
+- `Referrer-Policy: no-referrer`
+
+### Scanner separation
+
+Network and web scanning live in independent modules with separate
+limitations, evidence rules, and failure handling:
+
+- `scanners/network_scanner.py` — Nmap execution, XML parsing, service
+  classification, CVE enrichment.
+- `scanners/web_scanner.py` — HTTP reachability and security-header checks.
+- `core/validator.py` — single validation boundary shared by both paths.
+
+This separation keeps scanner-specific logic isolated and makes the trust
+boundary explicit: scanners receive only pre-validated targets.
+
+### Additional controls
+
+- CSRF protection on state-changing requests via Flask-WTF.
+- Parameterized SQLite queries; no string-concatenated SQL.
+- Nmap is invoked with an argument list and never through `shell=True`.
+- NVD failures never fail an assessment; CVE correlation is enrichment only.
+- Version-based CVE matches are always marked as potential findings requiring
+  manual verification.
+
+## Installation & Setup
+
+### Prerequisites
 
 - Python 3.10+
-- Nmap installed locally (required once the network scanner is implemented)
-- Optional: an NVD API key for higher CVE lookup rate limits
+- Nmap installed locally
+- Optional: a free NVD API key for higher CVE lookup rate limits
 
-## Installation
+### 1. Clone the repository
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+git clone <repository-url>
+cd vuln_scanner
+```
+
+### 2. Create and activate a virtual environment
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
 ```
 
 On Windows PowerShell:
 
 ```powershell
-python -m venv venv
-.\venv\Scripts\Activate.ps1
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+### 3. Install dependencies
+
+```bash
 pip install -r requirements.txt
 ```
 
-Configuration is environment-driven. Safe defaults are used when variables
-are unset:
+### 4. Configure Nmap
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `SECRET_KEY` | random per process | Flask session/CSRF signing |
-| `DATABASE` | `scans.db` | SQLite database path |
-| `NMAP_PATH` | `C:\Users\shine\Downloads\nmap.exe` | Nmap executable |
-| `NMAP_TIMEOUT` | `300` | Nmap timeout in seconds |
-| `NVD_API_URL` | NVD CVE API 2.0 endpoint | CVE lookup endpoint |
-| `NVD_API_KEY` | empty | Optional NVD API key |
-| `NVD_RATE_LIMIT_NO_KEY` | `6` | Seconds between unauthenticated NVD calls |
-| `NVD_CACHE_TTL_DAYS` | `7` | CVE cache lifetime |
-| `WEB_TIMEOUT` | `10` | Web request timeout in seconds |
-| `BLOCKED_HOSTS` | metadata/localhost set | Comma-separated blocked hosts |
-| `BLOCK_PRIVATE_RANGES` | `true` | Block private addresses for URL targets |
-| `LOG_LEVEL` | `INFO` | Logging level |
-| `LOG_FILE` | `logs/app.log` | Rotating log destination |
-| `DEBUG` | `false` | Enables a startup warning only; the server stays non-debug |
-
-Example:
+Install Nmap for your platform and set `NMAP_PATH` if it is not discoverable:
 
 ```bash
-export SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
-export NVD_API_KEY="your-key"
-export BLOCK_PRIVATE_RANGES=true
+export NMAP_PATH="/usr/bin/nmap"        # Linux/macOS
+export NMAP_PATH="C:\Program Files (x86)\Nmap\nmap.exe"  # Windows
 ```
 
-## Running
+### 5. Set the NVD API key
+
+```bash
+export NVD_API_KEY="your-nvd-api-key"
+```
+
+Without a key, NVD requests are throttled to roughly one every six seconds.
+With a key, the interval drops to roughly 0.6 seconds.
+
+### 6. Run the application
 
 ```bash
 python app.py
 ```
 
-Open <http://127.0.0.1:5000>. The server always binds to `127.0.0.1:5000` with
-`debug=False`. The SQLite database is created at runtime by `init_db()`.
+Open <http://127.0.0.1:5000>. The SQLite database is created automatically on
+first start.
+
+### Configuration reference
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `SECRET_KEY` | random per process | Flask session and CSRF signing |
+| `DATABASE` | `scans.db` | SQLite database path |
+| `NMAP_PATH` | platform-specific | Nmap executable |
+| `NMAP_TIMEOUT` | `300` | Nmap timeout in seconds |
+| `NVD_API_KEY` | unset | NVD API authentication |
+| `NVD_CACHE_TTL_DAYS` | `7` | CVE cache lifetime |
+| `BLOCK_PRIVATE_RANGES` | `true` | Block private addresses for URL targets |
+| `LOG_LEVEL` | `INFO` | Application log level |
+| `LOG_FILE` | `logs/app.log` | Rotating log destination |
 
 ## Testing
 
 ```bash
-pytest tests/
+pytest tests/ -q
 ```
+
+Current suite: **86 passing tests** covering validation/SSRF defenses, database
+constraints, scanner behavior, API routes, CSRF, security headers, and PDF
+generation.
 
 With coverage:
 
@@ -102,85 +210,55 @@ With coverage:
 pytest --cov=core --cov=scanners --cov=reports tests/
 ```
 
-## Project structure
+## Project Structure
 
 ```text
 vuln_scanner/
-├── app.py                     Flask routes, security headers, startup
-├── config.py                  Environment-backed Config class
-├── requirements.txt           Pinned dependencies
-├── README.md                  This document
-├── .gitignore                 Ignored runtime and tooling artifacts
+├── app.py                      Flask routes, CSP, startup
+├── config.py                   Environment-backed configuration
+├── requirements.txt            Pinned dependencies
 ├── core/
-│   ├── __init__.py            Core package marker
-│   ├── database.py            get_db() context manager
-│   ├── models.py              SQL schema and init_db()
-│   ├── validator.py           Input validation and SSRF defenses
-│   └── logger.py              Console + rotating file logging
+│   ├── database.py             SQLite connection context manager
+│   ├── models.py               Schema, constraints, and indexes
+│   ├── validator.py            Target validation and SSRF defenses
+│   └── logger.py               Console and rotating-file logging
 ├── scanners/
-│   ├── __init__.py            Scanner package marker
-│   ├── network_scanner.py     Nmap boundary (Phase 2 stub)
-│   ├── web_scanner.py         Web checks boundary (Phase 3 stub)
-│   └── cve_lookup.py          NVD lookup boundary (Phase 4 stub)
+│   ├── network_scanner.py      Nmap execution, XML parsing, findings
+│   ├── web_scanner.py          HTTP security-header assessment
+│   └── cve_lookup.py           NVD lookup, caching, and rate limiting
 ├── reports/
-│   ├── __init__.py            Reports package marker
-│   └── pdf_generator.py       PDF boundary (Phase 5 stub)
-├── templates/
-│   ├── index.html             Scan form and recent assessments
-│   ├── findings.html          Assessment findings placeholder
-│   └── comparison.html        Comparison placeholder
+│   └── pdf_generator.py        In-memory PDF report generation
 ├── static/
-│   └── style.css              Dark theme, risk colors, buttons, tables
-└── tests/
-    ├── __init__.py            Test package marker
-    ├── test_validator.py      IP/URL validation and SSRF tests
-    ├── test_scanners.py       Stub behavior tests
-    ├── test_api.py            Flask route, CSRF, and header tests
-    └── test_database.py       Schema, FK, and uniqueness tests
+│   ├── style.css               SOC/Doom theme and splash animations
+│   ├── js/splash.js            Cinematic splash sequence
+│   ├── img/                    Background and splash artwork
+│   └── video/                  Intro media
+├── templates/
+│   ├── index.html              Splash, SOC HUD, scan form, history
+│   ├── findings.html           Assessment results and evidence
+│   └── comparison.html         Comparison view
+├── tests/                      Automated test suite
+└── docs/screenshots/           README screenshots
 ```
 
 ## Limitations
 
-- Network scan will cover the top 100 TCP ports only.
-- Version detection is fingerprint-based, not proof of vulnerability.
-- Header findings are configuration weaknesses, not exploitable
-  vulnerabilities.
-- CVE correlation is not proof of exploitability; findings can be marked as
-  needing verification.
-- Scanners and report generation are not implemented in this scaffold and
-  raise `NotImplementedError` instead of returning invented data.
-- This is not a replacement for manual penetration testing.
+VulnScanner Pro is deliberately honest about what it does and does not do:
 
-## Security notes
+- Network scans cover the **top 100 TCP ports only** (`nmap -F`). UDP and full
+  65,535-port sweeps are not performed.
+- The scanner uses TCP connect (`-sT`), which works without raw-socket
+  privileges but is slower and more detectable than a SYN scan.
+- Service and version detection are fingerprint-based and can be inaccurate.
+- CVE matches are version-keyword correlations, not proof of exploitability,
+  and require manual verification.
+- Web findings reflect missing hardening headers, not confirmed exploits.
+- Web scanning does not authenticate, crawl, inject payloads, or analyze
+  JavaScript.
+- Absence of findings does not mean a target is secure.
+- This tool is **not** a full penetration test and does not replace manual
+  security assessment.
 
-- All user-supplied targets pass through `core.validator` before persistence
-  or scanner dispatch.
-- Shell metacharacters (`; & | ` $ > <`, newlines, NUL) are rejected.
-- Legacy/octal/integer IPv4 forms such as `2130706433` and `0177.0.0.1` are
-  normalized and blocked when they map to forbidden ranges.
-- Loopback, link-local, multicast, reserved, and unspecified addresses are
-  always rejected. Private URL targets are rejected by default via
-  `BLOCK_PRIVATE_RANGES`, while private network scan targets remain available
-  for authorized internal assessments.
-- URL hostnames are resolved with `socket.getaddrinfo()`, and **every**
-  resolved address is checked to prevent DNS-based SSRF bypasses.
-- Cloud metadata hosts (`169.254.169.254`, `metadata.google.internal`, and
-  related aliases) and `.local` / `.internal` suffixes are blocked.
-- Non-HTTP(S) schemes and URLs with embedded credentials are rejected.
-- Subprocess use is documented to require argument lists and must never use
-  `shell=True`; user input must be validated first.
-- CSRF protection is enabled for state-changing requests, and responses send
-  `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and a
-  restrictive `Content-Security-Policy`.
-- There is no SQL string concatenation; all statements use parameters.
+## License
 
-## Roadmap
-
-- Full TCP port scanning with configurable port sets.
-- Authenticated web testing behind explicit authorization and credential
-  handling.
-- Finding comparison view across assessments.
-- Scheduled scans with safe concurrency and rate limits.
-- Nmap XML parsing and evidence-backed network findings.
-- NVD API integration with caching and rate-limit handling.
-- PDF report generation with severity summaries and evidence.
+Released under the **MIT License**.
