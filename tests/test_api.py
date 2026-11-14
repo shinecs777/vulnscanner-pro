@@ -14,6 +14,7 @@ from core.models import init_db
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
     monkeypatch.setattr(Config, "DATABASE", str(tmp_path / "test.db"))
+    app.last_scans = {}
     init_db()
     app.config.update(TESTING=True, WTF_CSRF_ENABLED=False)
     try:

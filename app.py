@@ -6,6 +6,8 @@ core and scanner packages. No findings are synthesized here.
 
 import logging
 
+from datetime import datetime, timedelta
+
 from flask import Flask, abort, flash, redirect, render_template, request, url_for
 from flask_wtf.csrf import CSRFProtect
 
@@ -87,6 +89,15 @@ def scan():
     """Validate a target, record the assessment, and dispatch the scanner."""
     scan_type = (request.form.get("scan_type") or "").strip().lower()
     target = (request.form.get("target") or "").strip()
+
+    client_ip = request.remote_addr
+    now = datetime.now()
+    if not hasattr(app, 'last_scans'): app.last_scans = {}
+    if client_ip in app.last_scans:
+        if now - app.last_scans[client_ip] < timedelta(seconds=60):
+            flash("Rate limit exceeded. Please wait 60 seconds between scans.", "warning")
+            return redirect(url_for("index"))
+    app.last_scans[client_ip] = now
 
     try:
         validated_target = validate_scan_request(scan_type, target)

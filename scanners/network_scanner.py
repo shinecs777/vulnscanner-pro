@@ -482,16 +482,7 @@ def scan_network(assessment_id: int, target: str) -> dict:
         return _error("failed to update assessment status")
 
     command = [
-        Config.NMAP_PATH,
-        "-sT",
-        "-sV",
-        "-F",
-        "-oX",
-        "-",
-        "--host-timeout",
-        f"{Config.NMAP_TIMEOUT}s",
-        "-Pn",
-        target,
+        Config.NMAP_PATH, "-sT", "-T3", "-sV", "-F", "-oX", "-", "--host-timeout", f"{Config.NMAP_TIMEOUT}s", "-Pn", target,
     ]
 
     try:

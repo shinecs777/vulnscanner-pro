@@ -999,3 +999,49 @@ p.limitations strong,
 .dashboard-table tr:hover { background: rgba(255,255,255,0.02); }
 .dashboard-table .mono { font-family: 'JetBrains Mono', monospace; color: var(--green-primary); }
 .empty-state { text-align: center; color: var(--text-muted); padding: 2rem; border: 1px dashed var(--border); margin-top: 1rem; font-family: 'JetBrains Mono', monospace; }
+
+@media (max-width: 768px) {
+    /* 1. Splash Screen Text */
+    .splash-text {
+        font-size: 1.5rem !important; 
+        letter-spacing: 1px !important;
+        white-space: normal !important;
+        padding: 0 20px;
+        text-align: center;
+    }
+    .splash-btn {
+        font-size: 1rem !important;
+        padding: 12px 24px !important;
+    }
+
+    /* 2. SOC HUD */
+    .soc-hud {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        width: 100%;
+    }
+    .hud-divider { display: none; }
+
+    /* 3. Scan Form */
+    .scan-form-grid {
+        grid-template-columns: 1fr;
+    }
+    .btn-primary {
+        width: 100%;
+        margin-top: 10px;
+    }
+    .dashboard-header { text-align: left; }
+    .brand-title { font-size: 1.8rem; }
+
+    /* 4. Tables */
+    .table-container, .dashboard-table {
+        display: block;
+        width: 100%;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+
+    /* 5. Main Container */
+    .container { padding: 1rem; }
+}
