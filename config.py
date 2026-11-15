@@ -5,7 +5,6 @@ are committed to source control.
 """
 
 import os
-import secrets
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -35,7 +34,7 @@ def _env_set(name: str, default: set[str]) -> set[str]:
 class Config:
     """Single source of truth for runtime configuration."""
 
-    SECRET_KEY = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
+    SECRET_KEY = os.environ.get("SECRET_KEY") or "local-dev-secret-key-fixed-for-now"
     DATABASE = os.environ.get("DATABASE", "scans.db")
 
     NMAP_PATH = os.environ.get(

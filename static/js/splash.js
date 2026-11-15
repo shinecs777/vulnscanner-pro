@@ -4,6 +4,15 @@ document.addEventListener("DOMContentLoaded", function() {
     const btn = document.getElementById("splash-btn");
     const dashboard = document.getElementById("main-dashboard-content");
 
+    // CHECK IF SPLASH WAS ALREADY SEEN
+    if (sessionStorage.getItem("splash_seen") === "true") {
+        // Skip splash, show dashboard immediately
+        if (splash) splash.style.display = "none";
+        if (dashboard) dashboard.style.display = "block";
+        return; 
+    }
+
+    // PLAY SPLASH SEQUENCE
     setTimeout(() => {
         if (text1) {
             text1.classList.remove("hidden");
@@ -22,8 +31,10 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     }, 500);
 
+    // BUTTON CLICK
     if (btn) {
         btn.addEventListener("click", function() {
+            sessionStorage.setItem("splash_seen", "true"); // Mark as seen
             splash.style.display = "none";
             dashboard.style.display = "block";
             window.scrollTo(0, 0);

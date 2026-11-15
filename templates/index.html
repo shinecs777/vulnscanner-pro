@@ -109,5 +109,32 @@
     </div>
 
     <script src="/static/js/splash.js"></script>
+    <script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Check if the page was loaded from the browser cache (back button)
+        const navigationEntries = performance.getEntriesByType("navigation");
+        if (navigationEntries.length > 0 && navigationEntries[0].type === "back_forward") {
+            // Force a hard reload to fetch a fresh CSRF token and clear the form
+            window.location.reload();
+        }
+    });
+    </script>
+
+    <footer class="soc-footer">
+        <div class="footer-content">
+            <p class="footer-copyright">&copy; 2026 VulnScanner Pro.</p>
+            <p class="footer-about">
+                A full-stack security tool designed for authorized assessments. Features SSRF-hardened input validation, real-time NVD CVE intelligence, and automated PDF reporting.
+            </p>
+            <p class="footer-warning">
+                All scans are rate-limited. This is a portfolio project, not a replacement for a professional penetration test.
+            </p>
+            <p class="footer-links">
+                © 2026 VulnScanner Pro. Built by Shine CS | 
+                <a href="https://github.com/shinecs777" target="_blank" rel="noopener">GitHub</a> | 
+                <a href="mailto:shinecs777@gmail.com">Contact Me</a>
+            </p>
+        </div>
+    </footer>
 </body>
 </html>

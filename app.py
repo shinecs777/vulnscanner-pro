@@ -87,17 +87,36 @@ def index():
 @app.route("/scan", methods=["POST"])
 def scan():
     """Validate a target, record the assessment, and dispatch the scanner."""
-    scan_type = (request.form.get("scan_type") or "").strip().lower()
-    target = (request.form.get("target") or "").strip()
+    target = request.form.get("target", "").strip()
 
+    # Auto-detect scan type safely
+    if target.startswith("http://") or target.startswith("https://"):
+        scan_type = "web"
+    elif "." in target and not target.replace(".", "").isdigit():
+        # It contains a dot but isn't a pure IP address (e.g., example.com)
+        scan_type = "web"
+    else:
+        scan_type = "network"
+
+    # Sliding window rate limit: 3 scans per 60 seconds
     client_ip = request.remote_addr
     now = datetime.now()
-    if not hasattr(app, 'last_scans'): app.last_scans = {}
-    if client_ip in app.last_scans:
-        if now - app.last_scans[client_ip] < timedelta(seconds=60):
-            flash("Rate limit exceeded. Please wait 60 seconds between scans.", "warning")
-            return redirect(url_for("index"))
-    app.last_scans[client_ip] = now
+    
+    if not hasattr(app, 'scan_history'):
+        app.scan_history = {}
+    if client_ip not in app.scan_history:
+        app.scan_history[client_ip] = []
+        
+    # Remove timestamps older than 60 seconds
+    app.scan_history[client_ip] = [t for t in app.scan_history[client_ip] if now - t < timedelta(seconds=60)]
+    
+    # Check if limit reached (3 scans)
+    if len(app.scan_history[client_ip]) >= 3:
+        flash("Rate limit exceeded. You can only run 3 scans per minute.", "warning")
+        return redirect(url_for("index"))
+        
+    # Record this scan
+    app.scan_history[client_ip].append(now)
 
     try:
         validated_target = validate_scan_request(scan_type, target)
